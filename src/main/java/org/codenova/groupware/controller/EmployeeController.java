@@ -1,6 +1,7 @@
 package org.codenova.groupware.controller;
 
 import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.codenova.groupware.entity.Department;
@@ -10,12 +11,14 @@ import org.codenova.groupware.repository.DepartmentRepository;
 import org.codenova.groupware.repository.EmployeeRepository;
 import org.codenova.groupware.repository.SerialRepository;
 import org.codenova.groupware.request.AddEmployee;
+import org.codenova.groupware.request.Login;
 import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 import javax.naming.Binding;
+import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -28,9 +31,15 @@ public class EmployeeController {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
 
+    @GetMapping("/manage")
+    public ResponseEntity<List<Employee>> getEmployees() {
+        List<Employee> list = employeeRepository.findAll();
+        return ResponseEntity.status(200).body(list);
+    }
+
     @PostMapping
     @Transactional
-    public ResponseEntity<Employee> postEmployeeHandle(@ModelAttribute AddEmployee addemployee,
+    public ResponseEntity<Employee> postEmployeeHandle(@RequestBody @Valid AddEmployee addemployee,
                                                        BindingResult result) {
 
         if (result.hasErrors()) {
@@ -38,7 +47,7 @@ public class EmployeeController {
         }
 
         //1. 사원번호 생성
-        Optional<Serial> serial = serialRepository.findById(1); // JPA에서 id 로 찾는 걸 기본 제공해주는데, 결과가 Optional 객체가 나옴.
+        Optional<Serial> serial = serialRepository.findByRef("employee"); // JPA에서 id 로 찾는 걸 기본 제공해주는데, 결과가 Optional 객체가 나옴.
         // 정석적으로 사용한다면 serial.isPresent() 이런걸 확인해서 뽑아서 써야됨.
         Serial found = serial.get();    // 바로 뽑는 이유는 '100% 있는걸 알아서'
 
@@ -67,6 +76,21 @@ public class EmployeeController {
 
 
         return ResponseEntity.status(201).body(employee);   // created : 요청이 성공적으로 처리되었으며, 자원이 생성되었음을 나타내는 성공 상태 응답 코드
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<?> verifyHandle(@RequestBody @Valid Login login, BindingResult result) {
+        if (result.hasErrors()) {
+            return ResponseEntity.status(400).body(null);
+        }
+        Optional<Employee> employee = employeeRepository.findById(login.getId());
+        if (employee.isEmpty() || !BCrypt.checkpw(login.getPassword(), employee.get().getPassword()) ) {
+
+            return ResponseEntity.status(401).body(null);
+
+        }
+
+        return ResponseEntity.status(200).body(employee.get());
     }
 
     @GetMapping("/{id}")
